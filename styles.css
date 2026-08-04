@@ -356,7 +356,8 @@ button {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 12px;
-  max-width: 720px;
+  width: min(78%, 720px);
+  margin-right: auto;
   margin-bottom: 20px;
   direction: rtl;
   animation: message-in 180ms ease-out;
@@ -367,7 +368,12 @@ button {
 }
 
 .message.is-mine {
-  margin-right: auto;
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.message-content {
+  min-width: 0;
 }
 
 .message-head {
@@ -386,34 +392,10 @@ button {
   font-size: 10px;
 }
 
-.message-delete {
-  margin-inline-start: auto;
-  padding: 2px 7px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #8d968e;
+.message-id {
+  color: #626a63;
   font-size: 10px;
-  opacity: 0;
-  cursor: pointer;
-  pointer-events: none;
-  transition: color 120ms, background 120ms, opacity 120ms;
-}
-
-.message.is-mine:hover .message-delete,
-.message.is-mine:focus-within .message-delete {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.message-delete:hover {
-  background: rgba(255, 107, 94, 0.12);
-  color: #ff8a7e;
-}
-
-.message-delete:disabled {
-  opacity: 0.4;
-  cursor: wait;
+  direction: ltr;
 }
 
 .message-body {
@@ -431,8 +413,58 @@ button {
 }
 
 .message.is-mine .message-body {
-  border-color: rgba(200, 245, 96, 0.16);
-  background: rgba(200, 245, 96, 0.1);
+  border-color: rgba(200, 245, 96, 0.24);
+  border-radius: 15px 4px 15px 15px;
+  background: rgba(200, 245, 96, 0.14);
+  color: #f3f9e9;
+}
+
+.message.is-action {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 8px 0 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.message.is-action .avatar,
+.message.is-action .message-head {
+  display: none;
+}
+
+.message.is-action .message-body {
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: #aeb8af;
+  font-style: italic;
+}
+
+.message.is-announcement {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 10px 0 24px;
+}
+
+.message.is-announcement .avatar {
+  display: none;
+}
+
+.message.is-announcement .message-head {
+  justify-content: center;
+}
+
+.message.is-announcement .message-body {
+  display: block;
+  max-width: 680px;
+  margin: 0 auto;
+  border-color: rgba(255, 138, 81, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 138, 81, 0.1);
+  color: #ffd8c5;
+  text-align: center;
 }
 
 .setup-notice {
@@ -618,6 +650,90 @@ kbd {
   cursor: pointer;
 }
 
+.command-dialog {
+  width: min(680px, calc(100% - 28px));
+  max-height: min(760px, calc(100dvh - 28px));
+  padding: 26px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #202421;
+  color: var(--paper);
+  box-shadow: 0 30px 100px #000;
+}
+
+.command-dialog::backdrop {
+  background: rgba(8, 10, 8, 0.82);
+  backdrop-filter: blur(7px);
+}
+
+.command-dialog-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.command-dialog-head h2 {
+  margin: 0;
+}
+
+.command-dialog-head button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #303630;
+  cursor: pointer;
+}
+
+.command-dialog section + section {
+  margin-top: 24px;
+}
+
+.command-dialog h3 {
+  margin: 0 0 9px;
+  color: var(--acid);
+  font-size: 13px;
+}
+
+.command-dialog dl {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.command-dialog dl div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) 1fr;
+  gap: 14px;
+  padding: 10px 13px;
+}
+
+.command-dialog dl div + div {
+  border-top: 1px solid var(--line);
+}
+
+.command-dialog dt {
+  direction: ltr;
+  color: #d8ff7d;
+  font: 12px monospace;
+  text-align: left;
+}
+
+.command-dialog dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.command-warning {
+  margin: 20px 0 0;
+  color: #ffad86;
+  font-size: 11px;
+}
+
 .toast {
   position: fixed;
   bottom: 24px;
@@ -676,11 +792,6 @@ kbd {
     height: 36px;
   }
 
-  .message.is-mine .message-delete {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
   .composer {
     margin: 0 12px max(12px, env(safe-area-inset-bottom));
   }
@@ -691,6 +802,15 @@ kbd {
 
   .setup-notice {
     margin-inline: 12px;
+  }
+
+  .command-dialog {
+    padding: 20px 16px;
+  }
+
+  .command-dialog dl div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 

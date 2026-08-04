@@ -8,6 +8,9 @@ create table if not exists public.messages (
   content text not null check (
     char_length(btrim(content)) between 1 and 500
   ),
+  kind text not null default 'message' check (
+    kind in ('message', 'action', 'announcement')
+  ),
   created_at timestamptz not null default now()
 );
 
@@ -19,21 +22,8 @@ on public.messages for select
 to anon
 using (true);
 
-drop policy if exists "Anyone can send messages" on public.messages;
-create policy "Anyone can send messages"
-on public.messages for insert
-to anon
-with check (true);
-
-drop policy if exists "Anyone can delete messages" on public.messages;
-create policy "Anyone can delete messages"
-on public.messages for delete
-to anon
-using (true);
-
 grant usage on schema public to anon;
-grant select, insert, delete on table public.messages to anon;
-grant usage, select on sequence public.messages_id_seq to anon;
+grant select on table public.messages to anon;
 
 do $$
 begin

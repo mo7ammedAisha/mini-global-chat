@@ -106,6 +106,39 @@
       </form>
     </dialog>
 
+    <dialog class="command-dialog" id="commandDialog">
+      <div class="command-dialog-head">
+        <div>
+          <p class="eyebrow">مركز الأوامر</p>
+          <h2>أوامر المحادثة</h2>
+        </div>
+        <button id="closeCommandDialog" type="button" aria-label="إغلاق">×</button>
+      </div>
+      <section>
+        <h3>للجميع</h3>
+        <dl>
+          <div><dt>/help</dt><dd>عرض هذه القائمة</dd></div>
+          <div><dt>/name NAME</dt><dd>تغيير اسمك</dd></div>
+          <div><dt>/me TEXT</dt><dd>إرسال فعل أو حالة</dd></div>
+          <div><dt>/shrug TEXT</dt><dd>إضافة رمز shrug</dd></div>
+          <div><dt>/users</dt><dd>عرض عدد المتصلين</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>للمدير بعد تسجيل الصلاحية</h3>
+        <dl>
+          <div><dt>/admin PASSWORD</dt><dd>تفعيل صلاحيات المدير في هذه الجلسة</dd></div>
+          <div><dt>/clear</dt><dd>حذف المحادثة كاملة</dd></div>
+          <div><dt>/delete ID</dt><dd>حذف رسالة برقمها</dd></div>
+          <div><dt>/lock</dt><dd>إيقاف إرسال الرسائل</dd></div>
+          <div><dt>/unlock</dt><dd>فتح إرسال الرسائل</dd></div>
+          <div><dt>/announce TEXT</dt><dd>إرسال إعلان إداري</dd></div>
+          <div><dt>/logout</dt><dd>إنهاء صلاحية المدير</dd></div>
+        </dl>
+      </section>
+      <p class="command-warning">لا تُرسل كلمة الإدارة كرسالة عادية. استخدم دائمًا <code>/admin</code>.</p>
+    </dialog>
+
     <div class="toast" id="toast" role="status"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

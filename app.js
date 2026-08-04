@@ -22,6 +22,8 @@ const elements = {
   nameForm: document.querySelector("#nameForm"),
   nameInput: document.querySelector("#nameInput"),
   nameError: document.querySelector("#nameError"),
+  commandDialog: document.querySelector("#commandDialog"),
+  closeCommandDialog: document.querySelector("#closeCommandDialog"),
   toast: document.querySelector("#toast"),
 };
 
@@ -30,6 +32,7 @@ let client = null;
 let roomChannel = null;
 let sending = false;
 let toastTimer = null;
+let adminSecret = sessionStorage.getItem("chat-admin-secret") || "";
 const renderedMessages = new Set();
 const sessionId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
@@ -89,6 +92,8 @@ function createMessage(message, animate = true) {
   article.className = "message";
   article.dataset.id = messageId;
   article.dataset.username = message.username;
+  article.classList.toggle("is-action", message.kind === "action");
+  article.classList.toggle("is-announcement", message.kind === "announcement");
   if (message.username === username) article.classList.add("is-mine");
   if (!animate) article.style.animation = "none";
 
@@ -107,18 +112,15 @@ function createMessage(message, animate = true) {
   const time = document.createElement("time");
   time.dateTime = message.created_at;
   time.textContent = messageTime(message.created_at);
-  const deleteButton = document.createElement("button");
-  deleteButton.className = "message-delete";
-  deleteButton.type = "button";
-  deleteButton.textContent = "حذف";
-  deleteButton.setAttribute("aria-label", "حذف الرسالة");
-  deleteButton.addEventListener("click", () => deleteMessage(messageId, deleteButton));
+  const messageNumber = document.createElement("span");
+  messageNumber.className = "message-id";
+  messageNumber.textContent = `#${messageId}`;
   const body = document.createElement("p");
   body.className = "message-body";
-  body.textContent = message.content;
+  body.textContent = message.kind === "action" ? `${message.username} ${message.content}` : message.content;
   body.dir = "auto";
 
-  head.append(author, time, deleteButton);
+  head.append(author, time, messageNumber);
   content.append(head, body);
   article.append(avatar, content);
   elements.messages.append(article);
@@ -134,20 +136,10 @@ function removeMessage(messageId) {
   elements.emptyState.hidden = Boolean(elements.messages.querySelector(".message"));
 }
 
-async function deleteMessage(messageId, button) {
-  if (!client || button.disabled || !window.confirm("هل تريد حذف هذه الرسالة؟")) return;
-
-  button.disabled = true;
-  const { error } = await client.from("messages").delete().eq("id", messageId);
-  if (error) {
-    console.error(error);
-    button.disabled = false;
-    showToast("تعذر حذف الرسالة. فعّل صلاحية الحذف في Supabase.");
-    return;
-  }
-
-  removeMessage(messageId);
-  showToast("حُذفت الرسالة.");
+function clearRenderedMessages() {
+  elements.messages.querySelectorAll(".message").forEach((message) => message.remove());
+  renderedMessages.clear();
+  elements.emptyState.hidden = false;
 }
 
 function scrollToLatest(behavior = "smooth") {
@@ -157,7 +149,7 @@ function scrollToLatest(behavior = "smooth") {
 async function loadMessages() {
   const { data, error } = await client
     .from("messages")
-    .select("id, username, content, created_at")
+    .select("id, username, content, kind, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -213,7 +205,21 @@ async function startChat() {
 }
 
 async function sendMessage() {
-  const content = elements.input.value.trim();
+  const rawContent = elements.input.value.trim();
+  if (!rawContent || !client || sending) return;
+
+  if (rawContent.startsWith("/")) {
+    elements.input.value = "";
+    resizeInput();
+    await executeCommand(rawContent);
+    elements.input.focus();
+    return;
+  }
+
+  await publishMessage(rawContent);
+}
+
+async function publishMessage(content, kind = "message") {
   if (!content || !client || sending) return;
 
   sending = true;
@@ -222,25 +228,151 @@ async function sendMessage() {
   elements.input.value = "";
   resizeInput();
 
-  const { data, error } = await client
-    .from("messages")
-    .insert({ username, content })
-    .select("id, username, content, created_at")
-    .single();
+  const { data, error } = await client.rpc("send_chat_message", {
+    p_username: username,
+    p_content: content,
+    p_kind: kind,
+  });
 
   sending = false;
   elements.send.disabled = false;
   if (error) {
     console.error(error);
-    elements.input.value = draft;
+    if (kind === "message") elements.input.value = draft;
     resizeInput();
-    showToast("لم تُرسل الرسالة. حاول مرة أخرى.");
+    const locked = error.message?.includes("CHAT_LOCKED");
+    showToast(locked ? "المحادثة مقفلة حاليًا بواسطة المدير." : "لم تُرسل الرسالة. حاول مرة أخرى.");
     return;
   }
 
   createMessage(data);
   scrollToLatest();
   elements.input.focus();
+}
+
+async function callAdmin(functionName, parameters = {}) {
+  if (!adminSecret) {
+    showToast("استخدم /admin PASSWORD أولًا.");
+    return { ok: false, data: null };
+  }
+
+  const { data, error } = await client.rpc(functionName, {
+    p_secret: adminSecret,
+    ...parameters,
+  });
+  if (error) {
+    console.error(error);
+    if (error.message?.includes("INVALID_ADMIN_SECRET")) {
+      adminSecret = "";
+      sessionStorage.removeItem("chat-admin-secret");
+      showToast("انتهت صلاحية الإدارة أو كلمة السر غير صحيحة.");
+    } else {
+      showToast("تعذر تنفيذ الأمر الإداري.");
+    }
+    return { ok: false, data: null };
+  }
+  return { ok: true, data };
+}
+
+async function executeCommand(rawCommand) {
+  const separator = rawCommand.indexOf(" ");
+  const command = (separator === -1 ? rawCommand : rawCommand.slice(0, separator)).toLowerCase();
+  const argument = separator === -1 ? "" : rawCommand.slice(separator + 1).trim();
+
+  if (command === "/help") {
+    elements.commandDialog.showModal();
+    return;
+  }
+
+  if (command === "/name") {
+    const newName = normalizeName(argument);
+    if (newName.length < 2) {
+      showToast("الاستخدام: /name NAME");
+      return;
+    }
+    username = newName;
+    localStorage.setItem("global-chat-name", username);
+    updateIdentity();
+    if (roomChannel) await roomChannel.track({ name: username, joinedAt: new Date().toISOString() });
+    showToast(`أصبح اسمك ${username}`);
+    return;
+  }
+
+  if (command === "/me") {
+    if (!argument) return showToast("الاستخدام: /me TEXT");
+    await publishMessage(argument, "action");
+    return;
+  }
+
+  if (command === "/shrug") {
+    await publishMessage(`${argument}${argument ? " " : ""}¯\\_(ツ)_/¯`);
+    return;
+  }
+
+  if (command === "/users") {
+    showToast(`${elements.onlineCount.textContent} متصل الآن`);
+    return;
+  }
+
+  if (command === "/admin") {
+    if (!argument) return showToast("الاستخدام: /admin PASSWORD");
+    const { data, error } = await client.rpc("admin_auth", { p_secret: argument });
+    if (error || !data) {
+      console.error(error);
+      showToast("كلمة الإدارة غير صحيحة.");
+      return;
+    }
+    adminSecret = argument;
+    sessionStorage.setItem("chat-admin-secret", adminSecret);
+    showToast("تم تفعيل صلاحيات المدير لهذه الجلسة.");
+    return;
+  }
+
+  if (command === "/logout") {
+    adminSecret = "";
+    sessionStorage.removeItem("chat-admin-secret");
+    showToast("تم إنهاء صلاحية المدير.");
+    return;
+  }
+
+  if (command === "/clear") {
+    if (!window.confirm("حذف المحادثة كاملة؟ لا يمكن التراجع.")) return;
+    const result = await callAdmin("admin_clear_chat");
+    if (result.ok) {
+      clearRenderedMessages();
+      showToast(`حُذفت ${result.data} رسالة.`);
+    }
+    return;
+  }
+
+  if (command === "/delete") {
+    if (!/^\d+$/.test(argument)) return showToast("الاستخدام: /delete ID");
+    const result = await callAdmin("admin_delete_message", { p_message_id: Number(argument) });
+    if (result.ok) {
+      removeMessage(argument);
+      showToast(result.data ? "حُذفت الرسالة." : "لم يُعثر على الرسالة.");
+    }
+    return;
+  }
+
+  if (command === "/lock" || command === "/unlock") {
+    const locked = command === "/lock";
+    const result = await callAdmin("admin_set_lock", { p_locked: locked });
+    if (result.ok) showToast(locked ? "تم قفل المحادثة." : "تم فتح المحادثة.");
+    return;
+  }
+
+  if (command === "/announce") {
+    if (!argument) return showToast("الاستخدام: /announce TEXT");
+    const result = await callAdmin("admin_announce", { p_content: argument });
+    if (result.ok) {
+      createMessage(result.data);
+      scrollToLatest();
+    }
+    return;
+  }
+
+  showToast("أمر غير معروف. استخدم /help");
 }
 
 function resizeInput() {
@@ -270,6 +402,7 @@ elements.nameDialog.addEventListener("cancel", (event) => {
 });
 
 elements.changeName.addEventListener("click", askForName);
+elements.closeCommandDialog.addEventListener("click", () => elements.commandDialog.close());
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
