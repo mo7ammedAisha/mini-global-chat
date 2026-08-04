@@ -1,0 +1,57 @@
+# Jam'a Global Chat
+
+غرفة دردشة عامة صغيرة لـ 5 أو 6 أشخاص. يكتب كل شخص اسمه ويدخل مباشرة، دون حساب أو كلمة مرور.
+
+## Features
+
+- رسائل فورية عبر Supabase Realtime.
+- اسم محلي يمكن تغييره في أي وقت.
+- عرض عدد المتصلين حاليًا.
+- تصميم متجاوب للهاتف والكمبيوتر.
+- آخر 100 رسالة عند فتح التطبيق.
+- لا توجد خطوة بناء أو حزم npm.
+
+## 1. Create Supabase project
+
+1. افتح [supabase.com](https://supabase.com) وسجّل الدخول بحساب GitHub.
+2. أنشئ مشروعًا جديدًا ضمن الخطة المجانية.
+3. افتح `SQL Editor` ثم الصق محتوى ملف `supabase.sql` وشغّله مرة واحدة.
+4. افتح `Project Settings > API` وانسخ `Project URL` و`anon public key`.
+5. افتح `config.js` وضع القيمتين:
+
+```js
+window.CHAT_CONFIG = {
+  supabaseUrl: "https://YOUR_PROJECT.supabase.co",
+  supabaseAnonKey: "YOUR_ANON_PUBLIC_KEY",
+};
+```
+
+استخدم مفتاح `anon public` فقط. لا تضع مفتاح `service_role` داخل الموقع.
+
+## 2. Test locally
+
+شغّل خادمًا محليًا من داخل مجلد المشروع:
+
+```bash
+python3 -m http.server 8080
+```
+
+ثم افتح:
+
+```text
+http://localhost:8080
+```
+
+يمكنك فتح نافذتين خاصتين بأسماء مختلفة لتجربة المحادثة.
+
+## 3. Publish with GitHub Pages
+
+1. أنشئ مستودع GitHub جديدًا، مثل `mini-global-chat`.
+2. ارفع جميع الملفات الموجودة في هذا المجلد إلى جذر المستودع.
+3. افتح `Settings > Pages` في المستودع.
+4. اختر `Deploy from a branch` ثم فرع `main` والمجلد `/ (root)`.
+5. انتظر دقيقة، وسيظهر رابط الموقع في صفحة `Pages`.
+
+## Important limitation
+
+لا توجد مصادقة بناءً على طلب المشروع، لذلك يمكن لأي شخص يملك الرابط قراءة الرسائل وإرسالها واختيار أي اسم. استخدم رابطًا غير متداول وشاركْه مع المجموعة الصغيرة فقط.

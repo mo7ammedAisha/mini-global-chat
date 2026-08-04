@@ -1,0 +1,17 @@
+{
+  "name": "Jam'a Global Chat",
+  "short_name": "Jam'a",
+  "description": "A tiny global chat room for friends.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#171a18",
+  "theme_color": "#171a18",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

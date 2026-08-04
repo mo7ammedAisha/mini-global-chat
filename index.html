@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#171a18" />
+    <meta name="description" content="غرفة دردشة عالمية صغيرة وبسيطة." />
+    <title>جمعة | Global Chat</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <main class="app-shell">
+      <aside class="side-panel">
+        <a class="brand" href="./" aria-label="الصفحة الرئيسية">
+          <span class="brand-mark">ج</span>
+          <span>
+            <strong>جَمْعَة</strong>
+            <small>مساحتنا الصغيرة</small>
+          </span>
+        </a>
+
+        <section class="room-card" aria-label="الغرفة الحالية">
+          <div class="room-icon">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <p>الغرفة المفتوحة</p>
+            <h2>Global Chat</h2>
+          </div>
+        </section>
+
+        <div class="side-note">
+          <span class="live-dot"></span>
+          <p><strong id="onlineCount">0</strong> متصل الآن</p>
+        </div>
+
+        <button class="identity-button" id="changeNameButton" type="button">
+          <span class="avatar" id="sideAvatar">؟</span>
+          <span>
+            <small>أنت هنا باسم</small>
+            <strong id="sideUsername">زائر</strong>
+          </span>
+          <span class="edit-symbol">✎</span>
+        </button>
+      </aside>
+
+      <section class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">الغرفة العامة</p>
+            <h1>Global Chat <span>#</span></h1>
+          </div>
+          <div class="connection" id="connectionStatus" data-state="waiting">
+            <span></span>
+            <b>جاري الاتصال</b>
+          </div>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite" aria-label="الرسائل">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-mark">#</div>
+            <h2>هذه بداية الحديث</h2>
+            <p>اكتب أول رسالة وابدأ الجلسة.</p>
+          </div>
+        </div>
+
+        <div class="setup-notice" id="setupNotice" hidden>
+          <strong>التطبيق جاهز، وينقصه ربط Supabase</strong>
+          <p>ضع رابط المشروع و`anon key` في ملف <code>config.js</code>.</p>
+        </div>
+
+        <form class="composer" id="messageForm">
+          <textarea
+            id="messageInput"
+            rows="1"
+            maxlength="500"
+            placeholder="اكتب شيئًا للمجموعة..."
+            aria-label="نص الرسالة"
+          ></textarea>
+          <span class="character-count" id="characterCount">500</span>
+          <button id="sendButton" type="submit" aria-label="إرسال الرسالة">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12 20 4l-5.5 16-3.1-6.2L4 12Zm7.4 1.8L20 4" />
+            </svg>
+          </button>
+        </form>
+        <p class="composer-hint"><kbd>Enter</kbd> للإرسال · <kbd>Shift + Enter</kbd> لسطر جديد</p>
+      </section>
+    </main>
+
+    <dialog class="name-dialog" id="nameDialog">
+      <form method="dialog" id="nameForm">
+        <span class="dialog-mark">ج</span>
+        <p class="eyebrow">أهلًا بك في جَمْعَة</p>
+        <h2>بأي اسم ستدخل؟</h2>
+        <p>لا حسابات ولا كلمات مرور. اختر اسمًا يعرفك به الآخرون.</p>
+        <label for="nameInput">اسمك</label>
+        <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="مثال: أحمد" required />
+        <small id="nameError" role="alert"></small>
+        <button type="submit" value="confirm">دخول الغرفة</button>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
