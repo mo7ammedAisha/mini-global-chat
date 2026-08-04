@@ -25,8 +25,14 @@ on public.messages for insert
 to anon
 with check (true);
 
+drop policy if exists "Anyone can delete messages" on public.messages;
+create policy "Anyone can delete messages"
+on public.messages for delete
+to anon
+using (true);
+
 grant usage on schema public to anon;
-grant select, insert on table public.messages to anon;
+grant select, insert, delete on table public.messages to anon;
 grant usage, select on sequence public.messages_id_seq to anon;
 
 do $$

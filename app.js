@@ -80,12 +80,14 @@ function messageTime(timestamp) {
 }
 
 function createMessage(message, animate = true) {
-  if (!message?.id || renderedMessages.has(message.id)) return;
-  renderedMessages.add(message.id);
+  const messageId = String(message?.id || "");
+  if (!messageId || renderedMessages.has(messageId)) return;
+  renderedMessages.add(messageId);
   elements.emptyState.hidden = true;
 
   const article = document.createElement("article");
   article.className = "message";
+  article.dataset.id = messageId;
   article.dataset.username = message.username;
   if (message.username === username) article.classList.add("is-mine");
   if (!animate) article.style.animation = "none";
@@ -96,6 +98,7 @@ function createMessage(message, animate = true) {
   avatar.style.setProperty("--avatar", avatarColor(message.username));
 
   const content = document.createElement("div");
+  content.className = "message-content";
   const head = document.createElement("div");
   head.className = "message-head";
   const author = document.createElement("strong");
@@ -104,15 +107,47 @@ function createMessage(message, animate = true) {
   const time = document.createElement("time");
   time.dateTime = message.created_at;
   time.textContent = messageTime(message.created_at);
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "message-delete";
+  deleteButton.type = "button";
+  deleteButton.textContent = "حذف";
+  deleteButton.setAttribute("aria-label", "حذف الرسالة");
+  deleteButton.addEventListener("click", () => deleteMessage(messageId, deleteButton));
   const body = document.createElement("p");
   body.className = "message-body";
   body.textContent = message.content;
   body.dir = "auto";
 
-  head.append(author, time);
+  head.append(author, time, deleteButton);
   content.append(head, body);
   article.append(avatar, content);
   elements.messages.append(article);
+}
+
+function removeMessage(messageId) {
+  const normalizedId = String(messageId || "");
+  const message = [...elements.messages.querySelectorAll(".message")].find(
+    (item) => item.dataset.id === normalizedId,
+  );
+  if (message) message.remove();
+  renderedMessages.delete(normalizedId);
+  elements.emptyState.hidden = Boolean(elements.messages.querySelector(".message"));
+}
+
+async function deleteMessage(messageId, button) {
+  if (!client || button.disabled || !window.confirm("هل تريد حذف هذه الرسالة؟")) return;
+
+  button.disabled = true;
+  const { error } = await client.from("messages").delete().eq("id", messageId);
+  if (error) {
+    console.error(error);
+    button.disabled = false;
+    showToast("تعذر حذف الرسالة. فعّل صلاحية الحذف في Supabase.");
+    return;
+  }
+
+  removeMessage(messageId);
+  showToast("حُذفت الرسالة.");
 }
 
 function scrollToLatest(behavior = "smooth") {
@@ -139,6 +174,9 @@ function connectRealtime() {
         elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
       createMessage(payload.new);
       if (nearBottom || payload.new.username === username) scrollToLatest();
+    })
+    .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
+      removeMessage(payload.old.id);
     })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
