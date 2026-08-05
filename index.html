@@ -39,12 +39,6 @@
           <p><strong id="onlineCount">0</strong> متصل الآن</p>
         </div>
 
-        <button class="side-command-button" id="sideCommandButton" type="button">
-          <span>/</span>
-          <span><strong>دليل الأوامر</strong><small>اختصارات وإدارة الغرفة</small></span>
-          <b>⌘</b>
-        </button>
-
         <button class="identity-button" id="changeNameButton" type="button">
           <span class="avatar" id="sideAvatar">؟</span>
           <span>
@@ -57,23 +51,13 @@
 
       <section class="chat-panel">
         <header class="chat-header">
-          <div class="room-heading">
-            <span class="channel-mark">#</span>
-            <div>
-              <h1>Global Chat</h1>
-              <p>مكان واحد، وحديث مفتوح للجميع</p>
-            </div>
+          <div>
+            <p class="eyebrow">الغرفة العامة</p>
+            <h1>Global Chat <span>#</span></h1>
           </div>
-          <div class="header-actions">
-            <span class="admin-badge" id="adminBadge" hidden>مدير</span>
-            <div class="connection" id="connectionStatus" data-state="waiting">
-              <span></span>
-              <div><b>جاري الاتصال</b><small><strong id="headerOnlineCount">0</strong> في الغرفة</small></div>
-            </div>
-            <button class="header-icon-button" id="headerCommandButton" type="button" aria-label="عرض الأوامر">/</button>
-            <button class="mobile-identity" id="mobileIdentityButton" type="button" aria-label="تغيير الاسم">
-              <span class="avatar" id="mobileAvatar">؟</span>
-            </button>
+          <div class="connection" id="connectionStatus" data-state="waiting">
+            <span></span>
+            <b>جاري الاتصال</b>
           </div>
         </header>
 
@@ -85,17 +69,12 @@
           </div>
         </div>
 
-        <button class="scroll-latest" id="scrollLatestButton" type="button" hidden>
-          <span>↓</span> العودة لآخر الرسائل
-        </button>
-
         <div class="setup-notice" id="setupNotice" hidden>
           <strong>التطبيق جاهز، وينقصه ربط Supabase</strong>
           <p>ضع رابط المشروع و`anon key` في ملف <code>config.js</code>.</p>
         </div>
 
         <form class="composer" id="messageForm">
-          <button class="command-trigger" id="commandTrigger" type="button" aria-label="كتابة أمر">/</button>
           <textarea
             id="messageInput"
             rows="1"
@@ -105,13 +84,13 @@
             aria-label="نص الرسالة"
           ></textarea>
           <span class="character-count" id="characterCount">500</span>
-          <button class="send-button" id="sendButton" type="submit" aria-label="إرسال الرسالة">
+          <button id="sendButton" type="submit" aria-label="إرسال الرسالة">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 12 20 4l-5.5 16-3.1-6.2L4 12Zm7.4 1.8L20 4" />
             </svg>
           </button>
         </form>
-        <p class="composer-hint"><span>اكتب <kbd>/help</kbd> لاستعراض الأوامر</span><span><kbd>Enter</kbd> للإرسال · <kbd>Shift + Enter</kbd> لسطر جديد</span></p>
+        <p class="composer-hint"><kbd>Enter</kbd> للإرسال · <kbd>Shift + Enter</kbd> لسطر جديد</p>
       </section>
     </main>
 
