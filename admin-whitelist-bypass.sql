@@ -172,7 +172,9 @@ begin
   if not found then raise exception 'SESSION_INVALID'; end if;
 
   select * into settings_row from public.chat_settings where singleton = true;
-  if settings_row.locked then raise exception 'CHAT_LOCKED'; end if;
+  if settings_row.locked and not coalesce(session_row.admin_until >= v_now, false) then
+    raise exception 'CHAT_LOCKED';
+  end if;
   if settings_row.whitelist_enabled and not session_row.allowed
     and not coalesce(session_row.admin_until >= v_now, false) then
     raise exception 'SESSION_NOT_ALLOWED';
