@@ -519,6 +519,16 @@ button {
   color: #737c74;
 }
 
+.composer textarea.is-command {
+  direction: ltr;
+  text-align: left;
+  font-family: ui-monospace, "Cascadia Code", "Courier New", monospace;
+}
+
+.composer:has(textarea.is-command) {
+  border-color: rgba(255, 138, 81, 0.5);
+}
+
 .composer button {
   display: grid;
   place-items: center;

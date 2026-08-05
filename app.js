@@ -208,10 +208,11 @@ async function sendMessage() {
   const rawContent = elements.input.value.trim();
   if (!rawContent || !client || sending) return;
 
-  if (rawContent.startsWith("/")) {
+  if (rawContent.startsWith("/") || rawContent.startsWith("\\")) {
     elements.input.value = "";
     resizeInput();
-    await executeCommand(rawContent);
+    const normalizedCommand = rawContent.startsWith("\\") ? `/${rawContent.slice(1)}` : rawContent;
+    await executeCommand(normalizedCommand);
     elements.input.focus();
     return;
   }
@@ -376,6 +377,10 @@ async function executeCommand(rawCommand) {
 }
 
 function resizeInput() {
+  const trimmedStart = elements.input.value.trimStart();
+  const isCommand = trimmedStart.startsWith("/") || trimmedStart.startsWith("\\");
+  elements.input.classList.toggle("is-command", isCommand);
+  elements.input.dir = isCommand ? "ltr" : "auto";
   elements.input.style.height = "auto";
   elements.input.style.height = `${Math.min(elements.input.scrollHeight, 130)}px`;
   elements.remaining.textContent = String(500 - elements.input.value.length);
