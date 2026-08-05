@@ -45,6 +45,8 @@ let typingBroadcastActive = false;
 const remoteTypingUsers = new Map();
 const renderedMessages = new Set();
 const sessionId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+const visitorId = localStorage.getItem("chat-visitor-id") || crypto.randomUUID?.() || sessionId;
+localStorage.setItem("chat-visitor-id", visitorId);
 
 function normalizeName(value) {
   return value.replace(/\s+/g, " ").trim().slice(0, 24);
@@ -54,6 +56,21 @@ function avatarColor(name) {
   const colors = ["#c8f560", "#ff8a51", "#68d8d6", "#d9a7ff", "#ffd166", "#7ea8ff"];
   const hash = [...name].reduce((total, character) => total + character.codePointAt(0), 0);
   return colors[hash % colors.length];
+}
+
+function countOnlineVisitors(state) {
+  const visitors = new Set();
+  Object.values(state)
+    .flat()
+    .forEach((presence) => {
+      const normalizedName = presence.name?.trim().toLocaleLowerCase();
+      if (normalizedName) {
+        visitors.add(`name:${normalizedName}`);
+      } else if (presence.visitorId) {
+        visitors.add(`visitor:${presence.visitorId}`);
+      }
+    });
+  return visitors.size;
 }
 
 function updateIdentity() {
@@ -316,7 +333,7 @@ async function loadMessages() {
 
 function connectRealtime() {
   roomChannel = client
-    .channel("global-room", { config: { presence: { key: sessionId } } })
+    .channel("global-room", { config: { presence: { key: visitorId } } })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
       const nearBottom =
         elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
@@ -332,12 +349,12 @@ function connectRealtime() {
     })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
-      elements.onlineCount.textContent = Object.values(state).flat().length;
+      elements.onlineCount.textContent = countOnlineVisitors(state);
     })
     .subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         setConnection("online", "متصل الآن");
-        await roomChannel.track({ name: username, joinedAt: new Date().toISOString() });
+        await roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         setConnection("error", "انقطع الاتصال");
       }
@@ -456,7 +473,7 @@ async function executeCommand(rawCommand) {
     username = newName;
     localStorage.setItem("global-chat-name", username);
     updateIdentity();
-    if (roomChannel) await roomChannel.track({ name: username, joinedAt: new Date().toISOString() });
+    if (roomChannel) await roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
     showToast(`أصبح اسمك ${username}`);
     return;
   }
@@ -579,7 +596,7 @@ elements.nameForm.addEventListener("submit", (event) => {
   localStorage.setItem("global-chat-name", username);
   updateIdentity();
   elements.nameDialog.close();
-  if (roomChannel) roomChannel.track({ name: username, joinedAt: new Date().toISOString() });
+  if (roomChannel) roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
   elements.input.focus();
 });
 
