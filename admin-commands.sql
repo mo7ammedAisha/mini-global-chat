@@ -105,7 +105,8 @@ begin
     raise exception 'INVALID_ADMIN_SECRET';
   end if;
 
-  delete from public.messages;
+  delete from public.messages
+  where id is not null;
   get diagnostics deleted_count = row_count;
   return deleted_count;
 end;
