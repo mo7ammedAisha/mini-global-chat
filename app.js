@@ -33,6 +33,10 @@ let roomChannel = null;
 let sending = false;
 let toastTimer = null;
 let adminSecret = sessionStorage.getItem("chat-admin-secret") || "";
+let notificationsEnabled = localStorage.getItem("chat-notifications") === "true";
+let soundEnabled = localStorage.getItem("chat-sound") === "true";
+let audioContext = null;
+let unreadCount = 0;
 const renderedMessages = new Set();
 const sessionId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
@@ -80,6 +84,78 @@ function messageTime(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(timestamp));
+}
+
+async function playMessageSound() {
+  if (!soundEnabled) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+
+  audioContext ||= new AudioContext();
+  if (audioContext.state === "suspended") await audioContext.resume();
+
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(660, audioContext.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.08);
+  gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.16);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.17);
+}
+
+function notifyIncomingMessage(message) {
+  if (message.username === username) return;
+  playMessageSound().catch(console.error);
+
+  if (document.hidden) {
+    unreadCount += 1;
+    document.title = `(${unreadCount}) جمعة | Global Chat`;
+  }
+
+  if (!notificationsEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
+  const notification = new Notification(`${message.username} أرسل رسالة`, {
+    body: message.content,
+    icon: "icon.svg",
+    tag: `chat-message-${message.id}`,
+    silent: soundEnabled,
+  });
+  notification.onclick = () => {
+    window.focus();
+    notification.close();
+  };
+}
+
+async function enableNotifications() {
+  soundEnabled = true;
+  localStorage.setItem("chat-sound", "true");
+  await playMessageSound();
+
+  if (!("Notification" in window)) {
+    showToast("تم تفعيل الصوت. هذا المتصفح لا يدعم إشعارات النظام.");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  notificationsEnabled = permission === "granted";
+  localStorage.setItem("chat-notifications", String(notificationsEnabled));
+  showToast(
+    notificationsEnabled
+      ? "تم تفعيل إشعارات الرسائل والصوت."
+      : "تم تفعيل الصوت فقط؛ إذن الإشعارات مرفوض.",
+  );
+}
+
+function disableNotifications() {
+  notificationsEnabled = false;
+  soundEnabled = false;
+  localStorage.setItem("chat-notifications", "false");
+  localStorage.setItem("chat-sound", "false");
+  showToast("تم كتم الإشعارات والصوت.");
 }
 
 function createMessage(message, animate = true) {
@@ -168,6 +244,7 @@ function connectRealtime() {
       const nearBottom =
         elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
       createMessage(payload.new);
+      notifyIncomingMessage(payload.new);
       if (nearBottom || payload.new.username === username) scrollToLatest();
     })
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
@@ -319,6 +396,25 @@ async function executeCommand(rawCommand) {
     return;
   }
 
+  if (command === "/notify") {
+    await enableNotifications();
+    return;
+  }
+
+  if (command === "/mute") {
+    disableNotifications();
+    return;
+  }
+
+  if (command === "/sound") {
+    if (argument !== "on" && argument !== "off") return showToast("الاستخدام: /sound on أو /sound off");
+    soundEnabled = argument === "on";
+    localStorage.setItem("chat-sound", String(soundEnabled));
+    if (soundEnabled) await playMessageSound();
+    showToast(soundEnabled ? "تم تشغيل صوت الرسائل." : "تم إيقاف صوت الرسائل.");
+    return;
+  }
+
   if (command === "/admin") {
     if (!argument) return showToast("الاستخدام: /admin PASSWORD");
     const { data, error } = await client.rpc("admin_auth", { p_secret: argument });
@@ -421,6 +517,12 @@ elements.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     sendMessage();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    unreadCount = 0;
+    document.title = "جمعة | Global Chat";
   }
 });
 
