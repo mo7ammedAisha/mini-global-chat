@@ -24,7 +24,7 @@ revoke all on table public.chat_settings from anon, authenticated;
 
 do $$
 declare
-  chosen_secret text := 'Admin-password';
+  chosen_secret text := 'CHANGE_THIS_ADMIN_PASSWORD';
 begin
   if chosen_secret = 'CHANGE_THIS_ADMIN_PASSWORD' or char_length(chosen_secret) < 16 then
     raise exception 'Replace CHANGE_THIS_ADMIN_PASSWORD with at least 16 characters';
@@ -54,45 +54,6 @@ as $$
     where singleton = true
       and admin_secret_hash = extensions.crypt(p_secret, admin_secret_hash)
   );
-$$;
-
-drop function if exists public.send_chat_message(text, text, text);
-
-create or replace function public.send_chat_message(
-  p_username text,
-  p_content text,
-  p_kind text default 'message',
-  p_admin_secret text default null
-)
-returns public.messages
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  new_message public.messages;
-  chat_locked boolean;
-begin
-  if char_length(btrim(p_username)) not between 2 and 24
-    or char_length(btrim(p_content)) not between 1 and 500
-    or p_kind not in ('message', 'action') then
-    raise exception 'INVALID_MESSAGE';
-  end if;
-
-  select locked into chat_locked
-  from public.chat_settings
-  where singleton = true;
-
-  if coalesce(chat_locked, false) and not public.admin_auth(coalesce(p_admin_secret, '')) then
-    raise exception 'CHAT_LOCKED';
-  end if;
-
-  insert into public.messages (username, content, kind)
-  values (btrim(p_username), btrim(p_content), p_kind)
-  returning * into new_message;
-
-  return new_message;
-end;
 $$;
 
 create or replace function public.admin_clear_chat(p_secret text)
@@ -181,14 +142,12 @@ end;
 $$;
 
 revoke all on function public.admin_auth(text) from public;
-revoke all on function public.send_chat_message(text, text, text, text) from public;
 revoke all on function public.admin_clear_chat(text) from public;
 revoke all on function public.admin_delete_message(text, bigint) from public;
 revoke all on function public.admin_set_lock(text, boolean) from public;
 revoke all on function public.admin_announce(text, text) from public;
 
 grant execute on function public.admin_auth(text) to anon;
-grant execute on function public.send_chat_message(text, text, text, text) to anon;
 grant execute on function public.admin_clear_chat(text) to anon;
 grant execute on function public.admin_delete_message(text, bigint) to anon;
 grant execute on function public.admin_set_lock(text, boolean) to anon;
