@@ -121,7 +121,10 @@ function createMessage(message, animate = true) {
   body.dir = "auto";
 
   head.append(author, time, messageNumber);
-  content.append(head, body);
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble";
+  bubble.append(head, body);
+  content.append(bubble);
   article.append(avatar, content);
   elements.messages.append(article);
 }
