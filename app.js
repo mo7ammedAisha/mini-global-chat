@@ -233,6 +233,7 @@ async function publishMessage(content, kind = "message") {
     p_username: username,
     p_content: content,
     p_kind: kind,
+    p_admin_secret: adminSecret || null,
   });
 
   sending = false;

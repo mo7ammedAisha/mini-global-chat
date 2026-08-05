@@ -44,7 +44,7 @@ window.CHAT_CONFIG = {
 /admin YOUR_PRIVATE_PASSWORD
 ```
 
-بعدها تتاح أوامر `/clear` و`/delete ID` و`/lock` و`/unlock` و`/announce TEXT`. استخدم `/logout` عند الانتهاء.
+بعدها تتاح أوامر `/clear` و`/delete ID` و`/lock` و`/unlock` و`/announce TEXT`. يستطيع المدير متابعة الكتابة أثناء `/lock`، بينما تُمنع الرسائل من بقية المستخدمين. استخدم `/logout` عند الانتهاء.
 
 ## 2. Test locally
 

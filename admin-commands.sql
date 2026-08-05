@@ -56,10 +56,13 @@ as $$
   );
 $$;
 
+drop function if exists public.send_chat_message(text, text, text);
+
 create or replace function public.send_chat_message(
   p_username text,
   p_content text,
-  p_kind text default 'message'
+  p_kind text default 'message',
+  p_admin_secret text default null
 )
 returns public.messages
 language plpgsql
@@ -80,7 +83,7 @@ begin
   from public.chat_settings
   where singleton = true;
 
-  if coalesce(chat_locked, false) then
+  if coalesce(chat_locked, false) and not public.admin_auth(coalesce(p_admin_secret, '')) then
     raise exception 'CHAT_LOCKED';
   end if;
 
@@ -178,14 +181,14 @@ end;
 $$;
 
 revoke all on function public.admin_auth(text) from public;
-revoke all on function public.send_chat_message(text, text, text) from public;
+revoke all on function public.send_chat_message(text, text, text, text) from public;
 revoke all on function public.admin_clear_chat(text) from public;
 revoke all on function public.admin_delete_message(text, bigint) from public;
 revoke all on function public.admin_set_lock(text, boolean) from public;
 revoke all on function public.admin_announce(text, text) from public;
 
 grant execute on function public.admin_auth(text) to anon;
-grant execute on function public.send_chat_message(text, text, text) to anon;
+grant execute on function public.send_chat_message(text, text, text, text) to anon;
 grant execute on function public.admin_clear_chat(text) to anon;
 grant execute on function public.admin_delete_message(text, bigint) to anon;
 grant execute on function public.admin_set_lock(text, boolean) to anon;
