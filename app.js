@@ -9,7 +9,6 @@ const elements = {
   messages: document.querySelector("#messages"),
   emptyState: document.querySelector("#emptyState"),
   form: document.querySelector("#messageForm"),
-  lockedComposer: document.querySelector("#lockedComposer"),
   input: document.querySelector("#messageInput"),
   send: document.querySelector("#sendButton"),
   remaining: document.querySelector("#characterCount"),
@@ -43,6 +42,7 @@ let whitelistEnabled = true;
 let sessionAllowed = false;
 let sessionIsAdmin = false;
 let sessionShortId = "";
+let commandOnlyMode = true;
 let pollingTimer = null;
 let notificationsEnabled = localStorage.getItem("chat-notifications") === "true";
 let soundEnabled = localStorage.getItem("chat-sound") === "true";
@@ -205,20 +205,15 @@ function setChatAccess(enabled) {
 
 function applyPermissionState() {
   const canRead = accessVerified && (sessionIsAdmin || !whitelistEnabled || sessionAllowed);
-  const canUseComposer = accessVerified && ((canRead && !chatLocked) || Boolean(adminSecret));
-  elements.input.disabled = !canUseComposer;
-  elements.send.disabled = !canUseComposer;
+  commandOnlyMode = accessVerified && (chatLocked || !canRead);
+  elements.input.disabled = !accessVerified;
+  elements.send.disabled = !accessVerified;
   elements.form.classList.toggle("is-locked", chatLocked || !canRead);
-  elements.lockedComposer.hidden = canUseComposer || !accessVerified;
 
   if (!canRead) {
-    elements.lockedComposer.textContent = `بانتظار موافقة المدير · ID: ${sessionShortId || "..."}`;
-    elements.input.placeholder = "بانتظار موافقة المدير";
+    elements.input.placeholder = `بانتظار الموافقة (${sessionShortId || "..."}) — الأوامر فقط مثل /admin`;
   } else if (chatLocked) {
-    elements.lockedComposer.textContent = "المحادثة مقفلة · دخول المدير";
-    elements.input.placeholder = adminSecret
-      ? "المحادثة مقفلة؛ اكتب /unlock لفتحها..."
-      : "المحادثة مقفلة بواسطة المدير";
+    elements.input.placeholder = "المحادثة مقفلة — الأوامر فقط مثل /admin أو /unlock";
   } else {
     elements.input.placeholder = "اكتب شيئًا للمجموعة...";
   }
@@ -264,6 +259,10 @@ async function enterChat(chosenName) {
 }
 
 function updateLocalTyping() {
+  if (commandOnlyMode) {
+    stopTyping();
+    return;
+  }
   const isTyping = Boolean(elements.input.value.trim());
   clearTimeout(typingStopTimer);
 
@@ -828,31 +827,17 @@ elements.nameDialog.addEventListener("cancel", (event) => {
 });
 
 elements.changeName.addEventListener("click", askForName);
-elements.lockedComposer.addEventListener("click", async () => {
-  const password = window.prompt("أدخل كلمة الإدارة لفك القفل أو تنفيذ الأوامر:");
-  if (!password) return;
-  const { data, error } = await client.rpc("admin_elevate_session", {
-    p_secret: password,
-    p_session_token: chatSessionToken,
-  });
-  if (error || !data) {
-    showToast("كلمة الإدارة غير صحيحة.");
-    return;
-  }
-  adminSecret = password;
-  sessionIsAdmin = true;
-  sessionAllowed = true;
-  sessionStorage.setItem("chat-admin-secret", adminSecret);
-  applyPermissionState();
-  elements.input.focus();
-  showToast("صلاحية الإدارة مفعلة. استخدم /unlock لفتح المحادثة.");
-});
 elements.closeCommandDialog.addEventListener("click", () => elements.commandDialog.close());
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
 });
 elements.input.addEventListener("input", () => {
+  const value = elements.input.value.trimStart();
+  if (commandOnlyMode && value && !value.startsWith("/") && !value.startsWith("\\")) {
+    elements.input.value = "";
+    showToast("وضع الأوامر فقط: ابدأ بـ / مثل /admin");
+  }
   resizeInput();
   updateLocalTyping();
 });
