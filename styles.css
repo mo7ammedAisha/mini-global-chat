@@ -664,6 +664,10 @@ button {
   color: #ffad86;
 }
 
+.composer .locked-composer[hidden] {
+  display: none !important;
+}
+
 .composer textarea {
   width: 100%;
   max-height: 130px;
