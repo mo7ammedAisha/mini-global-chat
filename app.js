@@ -205,15 +205,17 @@ function setChatAccess(enabled) {
 
 function applyPermissionState() {
   const canRead = accessVerified && (sessionIsAdmin || !whitelistEnabled || sessionAllowed);
-  commandOnlyMode = accessVerified && (chatLocked || !canRead);
+  commandOnlyMode = accessVerified && ((chatLocked && !sessionIsAdmin) || !canRead);
   elements.input.disabled = !accessVerified;
   elements.send.disabled = !accessVerified;
   elements.form.classList.toggle("is-locked", chatLocked || !canRead);
 
   if (!canRead) {
     elements.input.placeholder = `بانتظار الموافقة (${sessionShortId || "..."}) — الأوامر فقط مثل /admin`;
-  } else if (chatLocked) {
+  } else if (chatLocked && !sessionIsAdmin) {
     elements.input.placeholder = "المحادثة مقفلة — الأوامر فقط مثل /admin أو /unlock";
+  } else if (chatLocked && sessionIsAdmin) {
+    elements.input.placeholder = "وضع المدير — المحادثة مقفلة أمام المستخدمين";
   } else {
     elements.input.placeholder = "اكتب شيئًا للمجموعة...";
   }
@@ -480,7 +482,7 @@ async function sendMessage() {
     return;
   }
 
-  if (chatLocked || (whitelistEnabled && !sessionAllowed)) {
+  if ((chatLocked && !sessionIsAdmin) || (whitelistEnabled && !sessionAllowed && !sessionIsAdmin)) {
     showToast(chatLocked ? "المحادثة مقفلة." : "بانتظار موافقة المدير على جلستك.");
     return;
   }
