@@ -24,6 +24,8 @@ const elements = {
   nameError: document.querySelector("#nameError"),
   commandDialog: document.querySelector("#commandDialog"),
   closeCommandDialog: document.querySelector("#closeCommandDialog"),
+  typingIndicator: document.querySelector("#typingIndicator"),
+  typingText: document.querySelector("#typingText"),
   toast: document.querySelector("#toast"),
 };
 
@@ -37,6 +39,10 @@ let notificationsEnabled = localStorage.getItem("chat-notifications") === "true"
 let soundEnabled = localStorage.getItem("chat-sound") === "true";
 let audioContext = null;
 let unreadCount = 0;
+let typingStopTimer = null;
+let lastTypingBroadcast = 0;
+let typingBroadcastActive = false;
+const remoteTypingUsers = new Map();
 const renderedMessages = new Set();
 const sessionId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
@@ -158,6 +164,77 @@ function disableNotifications() {
   showToast("تم كتم الإشعارات والصوت.");
 }
 
+function renderTypingIndicator() {
+  const names = [...new Set([...remoteTypingUsers.values()].map((entry) => entry.username))];
+  elements.typingIndicator.classList.toggle("active", names.length > 0);
+
+  if (names.length === 1) {
+    elements.typingText.textContent = `${names[0]} يكتب الآن`;
+  } else if (names.length === 2) {
+    elements.typingText.textContent = `${names[0]} و${names[1]} يكتبان الآن`;
+  } else if (names.length > 2) {
+    elements.typingText.textContent = `${names[0]} و${names.length - 1} آخرون يكتبون الآن`;
+  } else {
+    elements.typingText.textContent = "";
+  }
+}
+
+function receiveTypingStatus(payload) {
+  if (!payload?.sessionId || payload.sessionId === sessionId) return;
+  const previous = remoteTypingUsers.get(payload.sessionId);
+  if (previous) clearTimeout(previous.timer);
+
+  if (!payload.isTyping) {
+    remoteTypingUsers.delete(payload.sessionId);
+    renderTypingIndicator();
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    remoteTypingUsers.delete(payload.sessionId);
+    renderTypingIndicator();
+  }, 1900);
+  remoteTypingUsers.set(payload.sessionId, { username: payload.username, timer });
+  renderTypingIndicator();
+}
+
+function broadcastTyping(isTyping) {
+  if (!roomChannel) return;
+  roomChannel
+    .send({
+      type: "broadcast",
+      event: "typing",
+      payload: { sessionId, username, isTyping },
+    })
+    .catch(console.error);
+}
+
+function updateLocalTyping() {
+  const isTyping = Boolean(elements.input.value.trim());
+  clearTimeout(typingStopTimer);
+
+  if (!isTyping) {
+    stopTyping();
+    return;
+  }
+
+  const now = Date.now();
+  if (!typingBroadcastActive || now - lastTypingBroadcast > 800) {
+    broadcastTyping(true);
+    typingBroadcastActive = true;
+    lastTypingBroadcast = now;
+  }
+  typingStopTimer = setTimeout(stopTyping, 1300);
+}
+
+function stopTyping() {
+  clearTimeout(typingStopTimer);
+  typingStopTimer = null;
+  if (typingBroadcastActive) broadcastTyping(false);
+  typingBroadcastActive = false;
+  lastTypingBroadcast = 0;
+}
+
 function createMessage(message, animate = true) {
   const messageId = String(message?.id || "");
   if (!messageId || renderedMessages.has(messageId)) return;
@@ -250,6 +327,9 @@ function connectRealtime() {
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
       removeMessage(payload.old.id);
     })
+    .on("broadcast", { event: "typing" }, ({ payload }) => {
+      receiveTypingStatus(payload);
+    })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       elements.onlineCount.textContent = Object.values(state).flat().length;
@@ -287,6 +367,7 @@ async function startChat() {
 async function sendMessage() {
   const rawContent = elements.input.value.trim();
   if (!rawContent || !client || sending) return;
+  stopTyping();
 
   if (rawContent.startsWith("/") || rawContent.startsWith("\\")) {
     elements.input.value = "";
@@ -512,7 +593,11 @@ elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
 });
-elements.input.addEventListener("input", resizeInput);
+elements.input.addEventListener("input", () => {
+  resizeInput();
+  updateLocalTyping();
+});
+elements.input.addEventListener("blur", stopTyping);
 elements.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -520,6 +605,7 @@ elements.input.addEventListener("keydown", (event) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopTyping();
   if (!document.hidden) {
     unreadCount = 0;
     document.title = "جمعة | Global Chat";
