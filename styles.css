@@ -808,14 +808,24 @@ kbd {
   border-color: var(--acid-dark);
 }
 
-.access-code-field {
-  display: contents;
-}
-
 .name-dialog small {
   min-height: 22px;
   padding-top: 4px;
   color: #ff8a7e;
+}
+
+.command-output {
+  direction: ltr;
+  margin: 20px 0 0;
+  padding: 13px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #151815;
+  color: #d8ff7d;
+  font: 11px/1.7 monospace;
+  text-align: left;
+  white-space: pre-wrap;
 }
 
 .name-dialog button {

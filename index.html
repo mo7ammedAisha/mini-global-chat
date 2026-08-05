@@ -107,19 +107,9 @@
         <span class="dialog-mark">ج</span>
         <p class="eyebrow">أهلًا بك في جَمْعَة</p>
         <h2>بأي اسم ستدخل؟</h2>
-        <p>لا توجد حسابات فردية. اختر اسمًا وأدخل رمز المجموعة الخاص.</p>
+        <p>اختر اسمًا للدخول. قد تحتاج موافقة المدير إذا كانت القائمة البيضاء مفعّلة.</p>
         <label for="nameInput">اسمك</label>
         <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="مثال: أحمد" required />
-        <div class="access-code-field" id="accessCodeField">
-          <label for="accessCodeInput">رمز الغرفة</label>
-          <input
-            id="accessCodeInput"
-            type="password"
-            minlength="20"
-            autocomplete="current-password"
-            placeholder="الرمز المشترك للمجموعة"
-          />
-        </div>
         <small id="nameError" role="alert"></small>
         <button type="submit" value="confirm">دخول الغرفة</button>
       </form>
@@ -155,11 +145,19 @@
           <div><dt>/lock</dt><dd>إيقاف إرسال الرسائل</dd></div>
           <div><dt>/unlock</dt><dd>فتح إرسال الرسائل</dd></div>
           <div><dt>/announce TEXT</dt><dd>إرسال إعلان إداري</dd></div>
-          <div><dt>/access NEW_CODE</dt><dd>تغيير رمز دخول الغرفة</dd></div>
+          <div><dt>/white on|off</dt><dd>تشغيل أو إيقاف القائمة البيضاء</dd></div>
+          <div><dt>/active</dt><dd>عرض الجلسات النشطة ومعرفاتها</dd></div>
+          <div><dt>/allow ID</dt><dd>السماح لجلسة بالقراءة والكتابة</dd></div>
+          <div><dt>/revoke ID</dt><dd>سحب السماح من جلسة</dd></div>
+          <div><dt>/allowed</dt><dd>عرض الجلسات المسموحة</dd></div>
+          <div><dt>/allowall</dt><dd>السماح لجميع الجلسات الحالية</dd></div>
+          <div><dt>/revokeall</dt><dd>سحب السماح من جميع الجلسات</dd></div>
+          <div><dt>/clearrequests</dt><dd>حذف جلسات الانتظار</dd></div>
           <div><dt>/purgebots</dt><dd>حذف رسائل البوتات المكتشفة</dd></div>
           <div><dt>/logout</dt><dd>إنهاء صلاحية المدير</dd></div>
         </dl>
       </section>
+      <pre class="command-output" id="commandOutput" hidden></pre>
       <p class="command-warning">لا تُرسل كلمة الإدارة كرسالة عادية. استخدم دائمًا <code>/admin</code>.</p>
     </dialog>
 
