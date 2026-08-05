@@ -41,6 +41,7 @@ let accessVerified = false;
 let chatLocked = true;
 let whitelistEnabled = true;
 let sessionAllowed = false;
+let sessionIsAdmin = false;
 let sessionShortId = "";
 let pollingTimer = null;
 let notificationsEnabled = localStorage.getItem("chat-notifications") === "true";
@@ -203,7 +204,7 @@ function setChatAccess(enabled) {
 }
 
 function applyPermissionState() {
-  const canRead = accessVerified && (!whitelistEnabled || sessionAllowed);
+  const canRead = accessVerified && (sessionIsAdmin || !whitelistEnabled || sessionAllowed);
   const canUseComposer = accessVerified && ((canRead && !chatLocked) || Boolean(adminSecret));
   elements.input.disabled = !canUseComposer;
   elements.send.disabled = !canUseComposer;
@@ -396,6 +397,7 @@ async function refreshChatState() {
   chatLocked = data.locked === true;
   whitelistEnabled = data.whitelist_enabled === true;
   sessionAllowed = data.allowed === true;
+  sessionIsAdmin = data.is_admin === true;
   sessionShortId = data.short_id || sessionShortId;
   elements.onlineCount.textContent = data.active_names?.length || 0;
   renderTypingIndicator(data.typing_names || []);
@@ -439,6 +441,7 @@ async function startChat() {
       if (!sessionInfo) throw new Error("SESSION_INVALID");
       username = sessionInfo.username;
       sessionAllowed = sessionInfo.allowed === true;
+      sessionIsAdmin = sessionInfo.is_admin === true;
       sessionShortId = sessionInfo.short_id || "";
       setChatAccess(true);
       updateIdentity();
@@ -628,13 +631,18 @@ async function executeCommand(rawCommand) {
 
   if (command === "/admin") {
     if (!argument) return showToast("الاستخدام: /admin PASSWORD");
-    const { data, error } = await client.rpc("admin_auth", { p_secret: argument });
+    const { data, error } = await client.rpc("admin_elevate_session", {
+      p_secret: argument,
+      p_session_token: chatSessionToken,
+    });
     if (error || !data) {
       console.error(error);
       showToast("كلمة الإدارة غير صحيحة.");
       return;
     }
     adminSecret = argument;
+    sessionIsAdmin = true;
+    sessionAllowed = true;
     sessionStorage.setItem("chat-admin-secret", adminSecret);
     applyPermissionState();
     showToast("تم تفعيل صلاحيات المدير لهذه الجلسة.");
@@ -642,7 +650,9 @@ async function executeCommand(rawCommand) {
   }
 
   if (command === "/logout") {
+    await client.rpc("admin_demote_session", { p_session_token: chatSessionToken });
     adminSecret = "";
+    sessionIsAdmin = false;
     sessionStorage.removeItem("chat-admin-secret");
     applyPermissionState();
     showToast("تم إنهاء صلاحية المدير.");
@@ -821,12 +831,17 @@ elements.changeName.addEventListener("click", askForName);
 elements.lockedComposer.addEventListener("click", async () => {
   const password = window.prompt("أدخل كلمة الإدارة لفك القفل أو تنفيذ الأوامر:");
   if (!password) return;
-  const { data, error } = await client.rpc("admin_auth", { p_secret: password });
+  const { data, error } = await client.rpc("admin_elevate_session", {
+    p_secret: password,
+    p_session_token: chatSessionToken,
+  });
   if (error || !data) {
     showToast("كلمة الإدارة غير صحيحة.");
     return;
   }
   adminSecret = password;
+  sessionIsAdmin = true;
+  sessionAllowed = true;
   sessionStorage.setItem("chat-admin-secret", adminSecret);
   applyPermissionState();
   elements.input.focus();
