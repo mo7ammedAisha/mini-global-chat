@@ -262,14 +262,14 @@ declare
   settings_row public.chat_settings;
   global_window timestamptz;
   global_count integer;
-  current_time timestamptz := clock_timestamp();
+  v_now timestamptz := clock_timestamp();
 begin
   if char_length(btrim(p_content)) not between 1 and 500
     or p_kind not in ('message', 'action') then raise exception 'INVALID_MESSAGE'; end if;
 
   select * into session_row from public.chat_sessions
   where token_hash = encode(extensions.digest(p_session_token, 'sha256'), 'hex')
-    and expires_at >= current_time for update;
+    and expires_at >= v_now for update;
   if not found then raise exception 'SESSION_INVALID'; end if;
 
   select * into settings_row from public.chat_settings where singleton = true;
@@ -278,29 +278,29 @@ begin
     raise exception 'SESSION_NOT_ALLOWED';
   end if;
 
-  if session_row.last_message_at > current_time - interval '1 second' then
+  if session_row.last_message_at > v_now - interval '1 second' then
     raise exception 'SLOW_DOWN';
   end if;
 
-  if session_row.window_started < current_time - interval '1 minute' then
+  if session_row.window_started < v_now - interval '1 minute' then
     update public.chat_sessions
-    set window_started = current_time, message_count = 1,
-        last_message_at = current_time, last_seen_at = current_time
+    set window_started = v_now, message_count = 1,
+        last_message_at = v_now, last_seen_at = v_now
     where token_hash = session_row.token_hash;
   elsif session_row.message_count >= 12 then
     raise exception 'RATE_LIMIT';
   else
     update public.chat_sessions
     set message_count = message_count + 1,
-        last_message_at = current_time, last_seen_at = current_time
+        last_message_at = v_now, last_seen_at = v_now
     where token_hash = session_row.token_hash;
   end if;
 
   select window_started, message_count into global_window, global_count
   from public.chat_global_rate_limit where singleton = true for update;
-  if global_window < current_time - interval '1 minute' then
+  if global_window < v_now - interval '1 minute' then
     update public.chat_global_rate_limit
-    set window_started = current_time, message_count = 1 where singleton = true;
+    set window_started = v_now, message_count = 1 where singleton = true;
   elsif global_count >= 60 then
     raise exception 'GLOBAL_RATE_LIMIT';
   else
