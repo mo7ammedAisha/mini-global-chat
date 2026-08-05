@@ -638,6 +638,32 @@ button {
   box-shadow: 0 0 0 3px rgba(200, 245, 96, 0.05);
 }
 
+.composer.is-locked {
+  border-color: rgba(255, 138, 81, 0.22);
+  background: #151715;
+}
+
+.composer.is-locked textarea::placeholder {
+  color: #9a6d59;
+}
+
+.composer .locked-composer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: #171917;
+  color: #9a7767;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer .locked-composer:hover {
+  color: #ffad86;
+}
+
 .composer textarea {
   width: 100%;
   max-height: 130px;
@@ -776,6 +802,10 @@ kbd {
 
 .name-dialog input:focus {
   border-color: var(--acid-dark);
+}
+
+.access-code-field {
+  display: contents;
 }
 
 .name-dialog small {

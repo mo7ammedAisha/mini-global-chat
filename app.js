@@ -9,6 +9,7 @@ const elements = {
   messages: document.querySelector("#messages"),
   emptyState: document.querySelector("#emptyState"),
   form: document.querySelector("#messageForm"),
+  lockedComposer: document.querySelector("#lockedComposer"),
   input: document.querySelector("#messageInput"),
   send: document.querySelector("#sendButton"),
   remaining: document.querySelector("#characterCount"),
@@ -21,6 +22,8 @@ const elements = {
   nameDialog: document.querySelector("#nameDialog"),
   nameForm: document.querySelector("#nameForm"),
   nameInput: document.querySelector("#nameInput"),
+  accessCodeField: document.querySelector("#accessCodeField"),
+  accessCodeInput: document.querySelector("#accessCodeInput"),
   nameError: document.querySelector("#nameError"),
   commandDialog: document.querySelector("#commandDialog"),
   closeCommandDialog: document.querySelector("#closeCommandDialog"),
@@ -35,6 +38,12 @@ let roomChannel = null;
 let sending = false;
 let toastTimer = null;
 let adminSecret = sessionStorage.getItem("chat-admin-secret") || "";
+let roomAccessCode = sessionStorage.getItem("chat-room-access") || "";
+let chatSessionToken = sessionStorage.getItem("chat-session-token") || "";
+let accessVerified = false;
+let realtimeSigningKey = null;
+let chatLocked = true;
+let pollingTimer = null;
 let notificationsEnabled = localStorage.getItem("chat-notifications") === "true";
 let soundEnabled = localStorage.getItem("chat-sound") === "true";
 let audioContext = null;
@@ -58,18 +67,43 @@ function avatarColor(name) {
   return colors[hash % colors.length];
 }
 
-function countOnlineVisitors(state) {
+async function getRealtimeSigningKey() {
+  if (realtimeSigningKey) return realtimeSigningKey;
+  realtimeSigningKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(roomAccessCode),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+  return realtimeSigningKey;
+}
+
+async function signRealtimeValue(value) {
+  const key = await getRealtimeSigningKey();
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyRealtimeValue(value, signature) {
+  if (!signature || !roomAccessCode) return false;
+  const bytes = signature.match(/.{2}/g)?.map((byte) => Number.parseInt(byte, 16));
+  if (!bytes) return false;
+  const key = await getRealtimeSigningKey();
+  return crypto.subtle.verify("HMAC", key, new Uint8Array(bytes), new TextEncoder().encode(value));
+}
+
+async function countOnlineVisitors(state) {
   const visitors = new Set();
-  Object.values(state)
-    .flat()
-    .forEach((presence) => {
+  const presences = Object.values(state).flat();
+  await Promise.all(
+    presences.map(async (presence) => {
+      const signedValue = `${presence.visitorId}|${presence.name}`;
+      if (!(await verifyRealtimeValue(signedValue, presence.signature))) return;
       const normalizedName = presence.name?.trim().toLocaleLowerCase();
-      if (normalizedName) {
-        visitors.add(`name:${normalizedName}`);
-      } else if (presence.visitorId) {
-        visitors.add(`visitor:${presence.visitorId}`);
-      }
-    });
+      visitors.add(normalizedName ? `name:${normalizedName}` : `visitor:${presence.visitorId}`);
+    }),
+  );
   return visitors.size;
 }
 
@@ -85,6 +119,10 @@ function updateIdentity() {
 
 function askForName() {
   elements.nameInput.value = username;
+  const needsAccessCode = !accessVerified;
+  elements.accessCodeField.hidden = !needsAccessCode;
+  elements.accessCodeInput.required = needsAccessCode;
+  elements.accessCodeInput.value = "";
   elements.nameError.textContent = "";
   if (!elements.nameDialog.open) elements.nameDialog.showModal();
   requestAnimationFrame(() => elements.nameInput.focus());
@@ -196,8 +234,11 @@ function renderTypingIndicator() {
   }
 }
 
-function receiveTypingStatus(payload) {
+async function receiveTypingStatus(payload) {
   if (!payload?.sessionId || payload.sessionId === sessionId) return;
+  const signedValue = `${payload.sessionId}|${payload.username}|${payload.isTyping}|${payload.timestamp}`;
+  if (Math.abs(Date.now() - payload.timestamp) > 5000) return;
+  if (!(await verifyRealtimeValue(signedValue, payload.signature))) return;
   const previous = remoteTypingUsers.get(payload.sessionId);
   if (previous) clearTimeout(previous.timer);
 
@@ -215,15 +256,82 @@ function receiveTypingStatus(payload) {
   renderTypingIndicator();
 }
 
-function broadcastTyping(isTyping) {
-  if (!roomChannel) return;
+async function broadcastTyping(isTyping) {
+  if (!roomChannel || !accessVerified) return;
+  const timestamp = Date.now();
+  const signedValue = `${sessionId}|${username}|${isTyping}|${timestamp}`;
+  const signature = await signRealtimeValue(signedValue);
   roomChannel
     .send({
       type: "broadcast",
       event: "typing",
-      payload: { sessionId, username, isTyping },
+      payload: { sessionId, username, isTyping, timestamp, signature },
     })
     .catch(console.error);
+}
+
+async function trackPresence() {
+  if (!roomChannel || !accessVerified) return;
+  const signature = await signRealtimeValue(`${visitorId}|${username}`);
+  await roomChannel.track({ visitorId, name: username, signature, joinedAt: new Date().toISOString() });
+}
+
+function setChatAccess(enabled) {
+  accessVerified = enabled;
+  applyLockState(chatLocked);
+}
+
+function applyLockState(locked) {
+  chatLocked = locked;
+  const canUseComposer = accessVerified && (!locked || Boolean(adminSecret));
+  elements.input.disabled = !canUseComposer;
+  elements.send.disabled = !canUseComposer;
+  elements.form.classList.toggle("is-locked", locked);
+  elements.lockedComposer.hidden = !locked || Boolean(adminSecret) || !accessVerified;
+  elements.input.placeholder = locked
+    ? adminSecret
+      ? "المحادثة مقفلة؛ اكتب /unlock لفتحها..."
+      : "المحادثة مقفلة بواسطة المدير"
+    : "اكتب شيئًا للمجموعة...";
+
+  if (locked) {
+    stopTyping();
+    remoteTypingUsers.forEach((entry) => clearTimeout(entry.timer));
+    remoteTypingUsers.clear();
+    renderTypingIndicator();
+  }
+}
+
+async function validateStoredSession() {
+  const { data, error } = await client.rpc("validate_chat_session", { p_session_token: chatSessionToken });
+  if (error) throw error;
+  return data;
+}
+
+async function openChatSession(chosenName, accessCode) {
+  const { data, error } = await client.rpc("open_chat_session", {
+    p_access_code: accessCode,
+    p_username: chosenName,
+    p_visitor_id: visitorId,
+  });
+  if (error) throw error;
+  chatSessionToken = data;
+  roomAccessCode = accessCode;
+  realtimeSigningKey = null;
+  sessionStorage.setItem("chat-session-token", chatSessionToken);
+  sessionStorage.setItem("chat-room-access", roomAccessCode);
+}
+
+async function enterChat(chosenName, accessCode) {
+  await openChatSession(chosenName, accessCode);
+  username = chosenName;
+  localStorage.setItem("global-chat-name", username);
+  setChatAccess(true);
+  updateIdentity();
+  await loadMessages({ forceScroll: true });
+  connectRealtime();
+  startPolling();
+  return true;
 }
 
 function updateLocalTyping() {
@@ -319,42 +427,73 @@ function scrollToLatest(behavior = "smooth") {
   elements.messages.scrollTo({ top: elements.messages.scrollHeight, behavior });
 }
 
-async function loadMessages() {
-  const { data, error } = await client
-    .from("messages")
-    .select("id, username, content, kind, created_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
+async function loadMessages({ notifyNew = false, forceScroll = false } = {}) {
+  const { data, error } = await client.rpc("get_chat_messages", {
+    p_session_token: chatSessionToken,
+    p_limit: 100,
+  });
 
   if (error) throw error;
-  data.reverse().forEach((message) => createMessage(message, false));
-  scrollToLatest("instant");
+  const nearBottom =
+    elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
+  const serverIds = new Set(data.map((message) => String(message.id)));
+  elements.messages.querySelectorAll(".message").forEach((message) => {
+    if (!serverIds.has(message.dataset.id)) removeMessage(message.dataset.id);
+  });
+  let receivedNewMessage = false;
+  data.forEach((message) => {
+    const isNew = !renderedMessages.has(String(message.id));
+    createMessage(message, false);
+    if (isNew) {
+      receivedNewMessage = true;
+      if (notifyNew) notifyIncomingMessage(message);
+    }
+  });
+  if (forceScroll || (nearBottom && receivedNewMessage)) scrollToLatest(forceScroll ? "instant" : "smooth");
+}
+
+async function refreshChatStatus() {
+  if (!accessVerified || !chatSessionToken) return;
+  const { data, error } = await client.rpc("get_chat_status", { p_session_token: chatSessionToken });
+  if (error) {
+    if (error.message?.includes("SESSION_INVALID")) {
+      setChatAccess(false);
+      sessionStorage.removeItem("chat-session-token");
+      chatSessionToken = "";
+      askForName();
+    }
+    return;
+  }
+  applyLockState(data === true);
+}
+
+function startPolling() {
+  clearInterval(pollingTimer);
+  refreshChatStatus();
+  pollingTimer = setInterval(async () => {
+    if (!accessVerified) return;
+    try {
+      await Promise.all([loadMessages({ notifyNew: true }), refreshChatStatus()]);
+    } catch (error) {
+      console.error(error);
+    }
+  }, 2500);
 }
 
 function connectRealtime() {
   roomChannel = client
     .channel("global-room", { config: { presence: { key: visitorId } } })
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-      const nearBottom =
-        elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
-      createMessage(payload.new);
-      notifyIncomingMessage(payload.new);
-      if (nearBottom || payload.new.username === username) scrollToLatest();
-    })
-    .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
-      removeMessage(payload.old.id);
-    })
     .on("broadcast", { event: "typing" }, ({ payload }) => {
       receiveTypingStatus(payload);
     })
-    .on("presence", { event: "sync" }, () => {
+    .on("presence", { event: "sync" }, async () => {
       const state = roomChannel.presenceState();
-      elements.onlineCount.textContent = countOnlineVisitors(state);
+      elements.onlineCount.textContent = await countOnlineVisitors(state);
     })
     .subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         setConnection("online", "متصل الآن");
-        await roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
+        await trackPresence();
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         setConnection("error", "انقطع الاتصال");
       }
@@ -372,12 +511,36 @@ async function startChat() {
 
   try {
     client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-    await loadMessages();
-    connectRealtime();
+    setChatAccess(false);
+    if (username && roomAccessCode && chatSessionToken) {
+      const sessionUsername = await validateStoredSession();
+      if (!sessionUsername) throw new Error("SESSION_INVALID");
+      username = sessionUsername;
+      setChatAccess(true);
+      updateIdentity();
+      await loadMessages({ forceScroll: true });
+      connectRealtime();
+      startPolling();
+    } else {
+      roomAccessCode = "";
+      chatSessionToken = "";
+      sessionStorage.removeItem("chat-room-access");
+      sessionStorage.removeItem("chat-session-token");
+      askForName();
+    }
   } catch (error) {
     console.error(error);
-    setConnection("error", "تعذر الاتصال");
-    showToast("تعذر تحميل الرسائل. تحقق من إعداد Supabase.");
+    if (error.message?.includes("SESSION_INVALID")) {
+      roomAccessCode = "";
+      chatSessionToken = "";
+      sessionStorage.removeItem("chat-room-access");
+      sessionStorage.removeItem("chat-session-token");
+      setChatAccess(false);
+      askForName();
+    } else {
+      setConnection("error", "تعذر الاتصال");
+      showToast("تعذر تحميل الرسائل. تحقق من إعداد Supabase.");
+    }
   }
 }
 
@@ -395,6 +558,11 @@ async function sendMessage() {
     return;
   }
 
+  if (chatLocked) {
+    showToast("المحادثة مقفلة. استخدم /unlock إذا كنت المدير.");
+    return;
+  }
+
   await publishMessage(rawContent);
 }
 
@@ -408,10 +576,9 @@ async function publishMessage(content, kind = "message") {
   resizeInput();
 
   const { data, error } = await client.rpc("send_chat_message", {
-    p_username: username,
+    p_session_token: chatSessionToken,
     p_content: content,
     p_kind: kind,
-    p_admin_secret: adminSecret || null,
   });
 
   sending = false;
@@ -420,8 +587,25 @@ async function publishMessage(content, kind = "message") {
     console.error(error);
     if (kind === "message") elements.input.value = draft;
     resizeInput();
-    const locked = error.message?.includes("CHAT_LOCKED");
-    showToast(locked ? "المحادثة مقفلة حاليًا بواسطة المدير." : "لم تُرسل الرسالة. حاول مرة أخرى.");
+    const message = error.message || "";
+    if (message.includes("CHAT_LOCKED")) {
+      showToast("المحادثة مقفلة حاليًا بواسطة المدير.");
+    } else if (message.includes("SLOW_DOWN") || message.includes("RATE_LIMIT")) {
+      showToast("أنت ترسل بسرعة كبيرة. انتظر قليلًا.");
+    } else if (message.includes("ACCESS_DENIED")) {
+      setChatAccess(false);
+      sessionStorage.removeItem("chat-room-access");
+      showToast("تغيّر رمز الغرفة. أدخله مجددًا.");
+      askForName();
+    } else if (message.includes("SESSION_INVALID")) {
+      setChatAccess(false);
+      chatSessionToken = "";
+      sessionStorage.removeItem("chat-session-token");
+      showToast("انتهت جلسة المحادثة. أدخل رمز الغرفة مجددًا.");
+      askForName();
+    } else {
+      showToast("لم تُرسل الرسالة. حاول مرة أخرى.");
+    }
     return;
   }
 
@@ -470,10 +654,15 @@ async function executeCommand(rawCommand) {
       showToast("الاستخدام: /name NAME");
       return;
     }
+    const { error } = await client.rpc("rename_chat_session", {
+      p_session_token: chatSessionToken,
+      p_username: newName,
+    });
+    if (error) return showToast("تعذر تغيير الاسم.");
     username = newName;
     localStorage.setItem("global-chat-name", username);
     updateIdentity();
-    if (roomChannel) await roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
+    if (roomChannel) await trackPresence();
     showToast(`أصبح اسمك ${username}`);
     return;
   }
@@ -523,6 +712,7 @@ async function executeCommand(rawCommand) {
     }
     adminSecret = argument;
     sessionStorage.setItem("chat-admin-secret", adminSecret);
+    applyLockState(chatLocked);
     showToast("تم تفعيل صلاحيات المدير لهذه الجلسة.");
     return;
   }
@@ -530,6 +720,7 @@ async function executeCommand(rawCommand) {
   if (command === "/logout") {
     adminSecret = "";
     sessionStorage.removeItem("chat-admin-secret");
+    applyLockState(chatLocked);
     showToast("تم إنهاء صلاحية المدير.");
     return;
   }
@@ -557,7 +748,10 @@ async function executeCommand(rawCommand) {
   if (command === "/lock" || command === "/unlock") {
     const locked = command === "/lock";
     const result = await callAdmin("admin_set_lock", { p_locked: locked });
-    if (result.ok) showToast(locked ? "تم قفل المحادثة." : "تم فتح المحادثة.");
+    if (result.ok) {
+      applyLockState(locked);
+      showToast(locked ? "تم قفل المحادثة." : "تم فتح المحادثة.");
+    }
     return;
   }
 
@@ -567,6 +761,30 @@ async function executeCommand(rawCommand) {
     if (result.ok) {
       createMessage(result.data);
       scrollToLatest();
+    }
+    return;
+  }
+
+  if (command === "/access") {
+    if (argument.length < 20) return showToast("رمز الغرفة الجديد يجب أن يكون 20 محرفًا على الأقل.");
+    const result = await callAdmin("admin_set_access_code", { p_access_code: argument });
+    if (result.ok) {
+      await openChatSession(username, argument);
+      if (roomChannel) await client.removeChannel(roomChannel);
+      roomChannel = null;
+      connectRealtime();
+      showToast("تم تغيير رمز الغرفة لهذا التبويب. شاركه بأمان مع المجموعة.");
+    }
+    return;
+  }
+
+  if (command === "/purgebots") {
+    if (!window.confirm("حذف جميع الرسائل التي أُرسلت بأسماء تبدأ بـ Bot_؟")) return;
+    const result = await callAdmin("admin_purge_bot_messages");
+    if (result.ok) {
+      clearRenderedMessages();
+      await loadMessages({ forceScroll: true });
+      showToast(`حُذفت ${result.data} رسالة آلية.`);
     }
     return;
   }
@@ -584,7 +802,7 @@ function resizeInput() {
   elements.remaining.textContent = String(500 - elements.input.value.length);
 }
 
-elements.nameForm.addEventListener("submit", (event) => {
+elements.nameForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const chosenName = normalizeName(elements.nameInput.value);
   if (chosenName.length < 2) {
@@ -592,11 +810,24 @@ elements.nameForm.addEventListener("submit", (event) => {
     return;
   }
 
-  username = chosenName;
-  localStorage.setItem("global-chat-name", username);
-  updateIdentity();
+  if (!accessVerified) {
+    const accessCode = elements.accessCodeInput.value;
+    try {
+      await enterChat(chosenName, accessCode);
+    } catch (error) {
+      console.error(error);
+      elements.nameError.textContent = error.message?.includes("ACCESS_DENIED")
+        ? "رمز الغرفة غير صحيح."
+        : "تعذر إنشاء جلسة آمنة.";
+      return;
+    }
+  } else {
+    username = chosenName;
+    localStorage.setItem("global-chat-name", username);
+    updateIdentity();
+    if (roomChannel) await trackPresence();
+  }
   elements.nameDialog.close();
-  if (roomChannel) roomChannel.track({ visitorId, name: username, joinedAt: new Date().toISOString() });
   elements.input.focus();
 });
 
@@ -605,6 +836,20 @@ elements.nameDialog.addEventListener("cancel", (event) => {
 });
 
 elements.changeName.addEventListener("click", askForName);
+elements.lockedComposer.addEventListener("click", async () => {
+  const password = window.prompt("أدخل كلمة الإدارة لفك القفل أو تنفيذ الأوامر:");
+  if (!password) return;
+  const { data, error } = await client.rpc("admin_auth", { p_secret: password });
+  if (error || !data) {
+    showToast("كلمة الإدارة غير صحيحة.");
+    return;
+  }
+  adminSecret = password;
+  sessionStorage.setItem("chat-admin-secret", adminSecret);
+  applyLockState(chatLocked);
+  elements.input.focus();
+  showToast("صلاحية الإدارة مفعلة. استخدم /unlock لفتح المحادثة.");
+});
 elements.closeCommandDialog.addEventListener("click", () => elements.commandDialog.close());
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -630,6 +875,6 @@ document.addEventListener("visibilitychange", () => {
 });
 
 updateIdentity();
+setChatAccess(false);
 resizeInput();
-if (!username) askForName();
 startChat();

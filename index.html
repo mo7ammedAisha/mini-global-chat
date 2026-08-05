@@ -80,6 +80,9 @@
         </div>
 
         <form class="composer" id="messageForm">
+          <button class="locked-composer" id="lockedComposer" type="button" hidden>
+            المحادثة مقفلة · دخول المدير
+          </button>
           <textarea
             id="messageInput"
             rows="1"
@@ -104,9 +107,19 @@
         <span class="dialog-mark">ج</span>
         <p class="eyebrow">أهلًا بك في جَمْعَة</p>
         <h2>بأي اسم ستدخل؟</h2>
-        <p>لا حسابات ولا كلمات مرور. اختر اسمًا يعرفك به الآخرون.</p>
+        <p>لا توجد حسابات فردية. اختر اسمًا وأدخل رمز المجموعة الخاص.</p>
         <label for="nameInput">اسمك</label>
         <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="مثال: أحمد" required />
+        <div class="access-code-field" id="accessCodeField">
+          <label for="accessCodeInput">رمز الغرفة</label>
+          <input
+            id="accessCodeInput"
+            type="password"
+            minlength="20"
+            autocomplete="current-password"
+            placeholder="الرمز المشترك للمجموعة"
+          />
+        </div>
         <small id="nameError" role="alert"></small>
         <button type="submit" value="confirm">دخول الغرفة</button>
       </form>
@@ -142,6 +155,8 @@
           <div><dt>/lock</dt><dd>إيقاف إرسال الرسائل</dd></div>
           <div><dt>/unlock</dt><dd>فتح إرسال الرسائل</dd></div>
           <div><dt>/announce TEXT</dt><dd>إرسال إعلان إداري</dd></div>
+          <div><dt>/access NEW_CODE</dt><dd>تغيير رمز دخول الغرفة</dd></div>
+          <div><dt>/purgebots</dt><dd>حذف رسائل البوتات المكتشفة</dd></div>
           <div><dt>/logout</dt><dd>إنهاء صلاحية المدير</dd></div>
         </dl>
       </section>
