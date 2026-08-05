@@ -1,5 +1,5 @@
 -- Complete security migration for the chat.
--- Replace only the value assigned to chosen_access_code, then run the whole file once.
+-- The temporary access hash is removed by whitelist-mode.sql.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -8,12 +8,8 @@ add column if not exists room_access_hash text;
 
 do $$
 declare
-  chosen_access_code text := 'CHANGE_THIS_ROOM_ACCESS_CODE';
+  chosen_access_code text := encode(extensions.gen_random_bytes(32), 'hex');
 begin
-  if char_length(chosen_access_code) < 20 or chosen_access_code like 'CHANGE_%' then
-    raise exception 'Choose a private room access code with at least 20 characters';
-  end if;
-
   update public.chat_settings
   set room_access_hash = encode(extensions.digest(chosen_access_code, 'sha256'), 'hex'),
       locked = true
