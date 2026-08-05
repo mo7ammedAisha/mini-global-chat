@@ -15,9 +15,17 @@ const elements = {
   connection: document.querySelector("#connectionStatus"),
   setupNotice: document.querySelector("#setupNotice"),
   onlineCount: document.querySelector("#onlineCount"),
+  headerOnlineCount: document.querySelector("#headerOnlineCount"),
   changeName: document.querySelector("#changeNameButton"),
+  mobileIdentity: document.querySelector("#mobileIdentityButton"),
   sideUsername: document.querySelector("#sideUsername"),
   sideAvatar: document.querySelector("#sideAvatar"),
+  mobileAvatar: document.querySelector("#mobileAvatar"),
+  adminBadge: document.querySelector("#adminBadge"),
+  sideCommand: document.querySelector("#sideCommandButton"),
+  headerCommand: document.querySelector("#headerCommandButton"),
+  commandTrigger: document.querySelector("#commandTrigger"),
+  scrollLatest: document.querySelector("#scrollLatestButton"),
   nameDialog: document.querySelector("#nameDialog"),
   nameForm: document.querySelector("#nameForm"),
   nameInput: document.querySelector("#nameInput"),
@@ -51,6 +59,8 @@ function updateIdentity() {
   elements.sideUsername.textContent = username || "زائر";
   elements.sideAvatar.textContent = initial;
   elements.sideAvatar.style.setProperty("--avatar", avatarColor(username || "زائر"));
+  elements.mobileAvatar.textContent = initial;
+  elements.mobileAvatar.style.setProperty("--avatar", avatarColor(username || "زائر"));
   document.querySelectorAll(".message").forEach((message) => {
     message.classList.toggle("is-mine", message.dataset.username === username);
   });
@@ -140,10 +150,22 @@ function clearRenderedMessages() {
   elements.messages.querySelectorAll(".message").forEach((message) => message.remove());
   renderedMessages.clear();
   elements.emptyState.hidden = false;
+  elements.scrollLatest.hidden = true;
 }
 
 function scrollToLatest(behavior = "smooth") {
   elements.messages.scrollTo({ top: elements.messages.scrollHeight, behavior });
+  elements.scrollLatest.hidden = true;
+}
+
+function updateScrollButton() {
+  const distanceFromBottom =
+    elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight;
+  elements.scrollLatest.hidden = distanceFromBottom < 160;
+}
+
+function updateAdminBadge() {
+  elements.adminBadge.hidden = !adminSecret;
 }
 
 async function loadMessages() {
@@ -165,14 +187,20 @@ function connectRealtime() {
       const nearBottom =
         elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight < 120;
       createMessage(payload.new);
-      if (nearBottom || payload.new.username === username) scrollToLatest();
+      if (nearBottom || payload.new.username === username) {
+        scrollToLatest();
+      } else {
+        updateScrollButton();
+      }
     })
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload) => {
       removeMessage(payload.old.id);
     })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
-      elements.onlineCount.textContent = Object.values(state).flat().length;
+      const online = Object.values(state).flat().length;
+      elements.onlineCount.textContent = online;
+      elements.headerOnlineCount.textContent = online;
     })
     .subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
@@ -267,6 +295,7 @@ async function callAdmin(functionName, parameters = {}) {
     if (error.message?.includes("INVALID_ADMIN_SECRET")) {
       adminSecret = "";
       sessionStorage.removeItem("chat-admin-secret");
+      updateAdminBadge();
       showToast("انتهت صلاحية الإدارة أو كلمة السر غير صحيحة.");
     } else {
       showToast("تعذر تنفيذ الأمر الإداري.");
@@ -326,6 +355,7 @@ async function executeCommand(rawCommand) {
     }
     adminSecret = argument;
     sessionStorage.setItem("chat-admin-secret", adminSecret);
+    updateAdminBadge();
     showToast("تم تفعيل صلاحيات المدير لهذه الجلسة.");
     return;
   }
@@ -333,6 +363,7 @@ async function executeCommand(rawCommand) {
   if (command === "/logout") {
     adminSecret = "";
     sessionStorage.removeItem("chat-admin-secret");
+    updateAdminBadge();
     showToast("تم إنهاء صلاحية المدير.");
     return;
   }
@@ -408,6 +439,18 @@ elements.nameDialog.addEventListener("cancel", (event) => {
 });
 
 elements.changeName.addEventListener("click", askForName);
+elements.mobileIdentity.addEventListener("click", askForName);
+elements.sideCommand.addEventListener("click", () => elements.commandDialog.showModal());
+elements.headerCommand.addEventListener("click", () => elements.commandDialog.showModal());
+elements.commandTrigger.addEventListener("click", () => {
+  if (!elements.input.value.trim()) {
+    elements.input.value = "/";
+    resizeInput();
+  }
+  elements.input.focus();
+});
+elements.scrollLatest.addEventListener("click", () => scrollToLatest());
+elements.messages.addEventListener("scroll", updateScrollButton, { passive: true });
 elements.closeCommandDialog.addEventListener("click", () => elements.commandDialog.close());
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -422,6 +465,7 @@ elements.input.addEventListener("keydown", (event) => {
 });
 
 updateIdentity();
+updateAdminBadge();
 resizeInput();
 if (!username) askForName();
 startChat();
