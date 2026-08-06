@@ -158,6 +158,36 @@
       <p class="command-warning">لا تُرسل كلمة الإدارة كرسالة عادية. استخدم دائمًا <code>/admin</code>.</p>
     </dialog>
 
+    <dialog class="active-dialog" id="activeDialog">
+      <div class="active-dialog-head">
+        <div>
+          <p class="eyebrow">إدارة الوصول</p>
+          <h2>الجلسات النشطة</h2>
+          <p>حدد جلسة أو أكثر ثم اختر الإجراء.</p>
+        </div>
+        <div class="active-head-actions">
+          <button id="refreshActiveSessions" type="button" aria-label="تحديث الجلسات">↻</button>
+          <button id="closeActiveDialog" type="button" aria-label="إغلاق">×</button>
+        </div>
+      </div>
+
+      <label class="select-all-row">
+        <input id="selectAllSessions" type="checkbox" />
+        <span>تحديد جميع الجلسات الظاهرة</span>
+        <b id="activeSessionCount">0</b>
+      </label>
+
+      <div class="active-session-list" id="activeSessionList"></div>
+
+      <div class="active-dialog-actions">
+        <span id="selectedSessionCount">لم تحدد أي جلسة</span>
+        <div>
+          <button class="revoke-button" id="revokeSelectedSessions" type="button">Revoke</button>
+          <button class="allow-button" id="allowSelectedSessions" type="button">Allow</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

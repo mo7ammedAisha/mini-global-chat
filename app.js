@@ -25,6 +25,15 @@ const elements = {
   commandDialog: document.querySelector("#commandDialog"),
   commandOutput: document.querySelector("#commandOutput"),
   closeCommandDialog: document.querySelector("#closeCommandDialog"),
+  activeDialog: document.querySelector("#activeDialog"),
+  activeSessionList: document.querySelector("#activeSessionList"),
+  activeSessionCount: document.querySelector("#activeSessionCount"),
+  selectedSessionCount: document.querySelector("#selectedSessionCount"),
+  selectAllSessions: document.querySelector("#selectAllSessions"),
+  refreshActiveSessions: document.querySelector("#refreshActiveSessions"),
+  closeActiveDialog: document.querySelector("#closeActiveDialog"),
+  allowSelectedSessions: document.querySelector("#allowSelectedSessions"),
+  revokeSelectedSessions: document.querySelector("#revokeSelectedSessions"),
   typingIndicator: document.querySelector("#typingIndicator"),
   typingText: document.querySelector("#typingText"),
   toast: document.querySelector("#toast"),
@@ -567,6 +576,107 @@ function showCommandOutput(title, lines) {
   if (!elements.commandDialog.open) elements.commandDialog.showModal();
 }
 
+function updateSelectedSessionCount() {
+  const checkboxes = [...elements.activeSessionList.querySelectorAll('input[type="checkbox"]')];
+  const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
+  elements.selectedSessionCount.textContent = selected
+    ? `تم تحديد ${selected} جلسة`
+    : "لم تحدد أي جلسة";
+  elements.selectAllSessions.checked = checkboxes.length > 0 && selected === checkboxes.length;
+  elements.selectAllSessions.indeterminate = selected > 0 && selected < checkboxes.length;
+}
+
+function renderActiveSessions(sessions) {
+  elements.activeSessionList.replaceChildren();
+  elements.activeSessionCount.textContent = String(sessions.length);
+  elements.selectAllSessions.checked = false;
+  elements.selectAllSessions.indeterminate = false;
+
+  if (!sessions.length) {
+    const empty = document.createElement("div");
+    empty.className = "active-empty-state";
+    empty.textContent = "لا توجد جلسات نشطة حاليًا.";
+    elements.activeSessionList.append(empty);
+    updateSelectedSessionCount();
+    return;
+  }
+
+  sessions.forEach((session) => {
+    const row = document.createElement("label");
+    row.className = "active-session-row";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = session.short_id;
+    checkbox.addEventListener("change", updateSelectedSessionCount);
+
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.textContent = session.username.charAt(0).toUpperCase();
+    avatar.style.setProperty("--avatar", avatarColor(session.username));
+
+    const info = document.createElement("span");
+    info.className = "active-session-info";
+    const name = document.createElement("strong");
+    name.textContent = session.username;
+    name.dir = "auto";
+    const details = document.createElement("small");
+    const lastSeen = new Intl.DateTimeFormat("ar", { hour: "2-digit", minute: "2-digit" }).format(
+      new Date(session.last_seen_at),
+    );
+    details.textContent = `${session.short_id} · ${lastSeen}`;
+    info.append(name, details);
+
+    const status = document.createElement("span");
+    status.className = `session-status${session.allowed ? " allowed" : ""}`;
+    status.textContent = session.allowed ? "Allowed" : "Waiting";
+
+    row.append(checkbox, avatar, info, status);
+    elements.activeSessionList.append(row);
+  });
+  updateSelectedSessionCount();
+}
+
+async function loadActiveSessions() {
+  const result = await callAdmin("admin_list_active_sessions");
+  if (!result.ok) return false;
+  renderActiveSessions(result.data);
+  if (!elements.activeDialog.open) elements.activeDialog.showModal();
+  return true;
+}
+
+async function setSelectedSessionsAllowed(allowed) {
+  const selectedIds = [...elements.activeSessionList.querySelectorAll('input[type="checkbox"]:checked')].map(
+    (checkbox) => checkbox.value,
+  );
+  if (!selectedIds.length) {
+    showToast("حدد جلسة واحدة على الأقل.");
+    return;
+  }
+
+  elements.allowSelectedSessions.disabled = true;
+  elements.revokeSelectedSessions.disabled = true;
+  const results = await Promise.all(
+    selectedIds.map((id) =>
+      client.rpc("admin_set_session_allowed", {
+        p_secret: adminSecret,
+        p_identifier: id,
+        p_allowed: allowed,
+      }),
+    ),
+  );
+  elements.allowSelectedSessions.disabled = false;
+  elements.revokeSelectedSessions.disabled = false;
+
+  const failed = results.filter((result) => result.error).length;
+  if (failed) {
+    showToast(`تعذر تحديث ${failed} جلسة.`);
+  } else {
+    showToast(`${allowed ? "تم السماح لـ" : "تم سحب السماح من"} ${selectedIds.length} جلسة.`);
+  }
+  await Promise.all([loadActiveSessions(), refreshChatState()]);
+}
+
 async function executeCommand(rawCommand) {
   const separator = rawCommand.indexOf(" ");
   const command = (separator === -1 ? rawCommand : rawCommand.slice(0, separator)).toLowerCase();
@@ -713,13 +823,7 @@ async function executeCommand(rawCommand) {
   }
 
   if (command === "/active") {
-    const result = await callAdmin("admin_list_active_sessions");
-    if (result.ok) {
-      const lines = result.data.length
-        ? result.data.map((session) => `${session.short_id}  ${session.allowed ? "ALLOW" : "WAIT "}  ${session.username}`)
-        : ["No active sessions"];
-      showCommandOutput("ACTIVE SESSIONS", lines);
-    }
+    await loadActiveSessions();
     return;
   }
 
@@ -830,6 +934,16 @@ elements.nameDialog.addEventListener("cancel", (event) => {
 
 elements.changeName.addEventListener("click", askForName);
 elements.closeCommandDialog.addEventListener("click", () => elements.commandDialog.close());
+elements.closeActiveDialog.addEventListener("click", () => elements.activeDialog.close());
+elements.refreshActiveSessions.addEventListener("click", loadActiveSessions);
+elements.selectAllSessions.addEventListener("change", () => {
+  elements.activeSessionList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.checked = elements.selectAllSessions.checked;
+  });
+  updateSelectedSessionCount();
+});
+elements.allowSelectedSessions.addEventListener("click", () => setSelectedSessionsAllowed(true));
+elements.revokeSelectedSessions.addEventListener("click", () => setSelectedSessionsAllowed(false));
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();

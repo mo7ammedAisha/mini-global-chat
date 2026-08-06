@@ -901,6 +901,200 @@ kbd {
   font-size: 11px;
 }
 
+.active-dialog {
+  width: min(680px, calc(100% - 28px));
+  max-height: min(760px, calc(100dvh - 28px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #202421;
+  color: var(--paper);
+  box-shadow: 0 30px 100px #000;
+}
+
+.active-dialog::backdrop {
+  background: rgba(8, 10, 8, 0.82);
+  backdrop-filter: blur(7px);
+}
+
+.active-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.active-dialog-head h2,
+.active-dialog-head p {
+  margin: 0;
+}
+
+.active-dialog-head > div:first-child > p:last-child {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.active-head-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.active-head-actions button {
+  width: 35px;
+  height: 35px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #2a302b;
+  cursor: pointer;
+}
+
+.select-all-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 26px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.select-all-row b {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(200, 245, 96, 0.09);
+  color: var(--acid);
+  text-align: center;
+}
+
+.active-session-list {
+  max-height: 430px;
+  padding: 8px 12px;
+  overflow-y: auto;
+  scrollbar-color: #424a43 transparent;
+}
+
+.active-session-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  cursor: pointer;
+  transition: 120ms ease;
+}
+
+.active-session-row:hover,
+.active-session-row:has(input:checked) {
+  border-color: rgba(200, 245, 96, 0.16);
+  background: rgba(200, 245, 96, 0.045);
+}
+
+.active-session-row input,
+.select-all-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--acid);
+}
+
+.active-session-row .avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+
+.active-session-info {
+  min-width: 0;
+}
+
+.active-session-info strong,
+.active-session-info small {
+  display: block;
+}
+
+.active-session-info strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-session-info small {
+  margin-top: 2px;
+  color: var(--muted);
+  font: 9px monospace;
+  direction: ltr;
+  text-align: right;
+}
+
+.session-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 138, 81, 0.09);
+  color: #ffad86;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.session-status.allowed {
+  background: rgba(200, 245, 96, 0.09);
+  color: var(--acid);
+}
+
+.active-empty-state {
+  padding: 48px 20px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.active-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 26px;
+  border-top: 1px solid var(--line);
+  background: #1b1f1c;
+}
+
+.active-dialog-actions > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.active-dialog-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.active-dialog-actions button {
+  min-width: 88px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.allow-button {
+  border-color: transparent !important;
+  background: var(--acid);
+  color: var(--ink);
+}
+
+.revoke-button {
+  background: rgba(255, 107, 94, 0.08);
+  color: #ff9b91;
+}
+
 .toast {
   position: fixed;
   bottom: 24px;
@@ -983,6 +1177,38 @@ kbd {
   .command-dialog dl div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .active-dialog-head,
+  .active-dialog-actions {
+    padding-inline: 16px;
+  }
+
+  .select-all-row {
+    padding-inline: 18px;
+  }
+
+  .active-session-list {
+    padding-inline: 6px;
+  }
+
+  .active-session-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .session-status {
+    grid-column: 3;
+    justify-self: start;
+  }
+
+  .active-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .active-dialog-actions > div,
+  .active-dialog-actions button {
+    flex: 1;
   }
 }
 
